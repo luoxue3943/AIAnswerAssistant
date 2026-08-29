@@ -16,6 +16,8 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @connect      *
+// @downloadURL https://update.greasyfork.org/scripts/593483/AI-Answer-Assistant.user.js
+// @updateURL https://update.greasyfork.org/scripts/593483/AI-Answer-Assistant.meta.js
 // ==/UserScript==
 
 (() => {
