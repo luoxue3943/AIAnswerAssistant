@@ -1,9 +1,10 @@
 // ==UserScript==
-// @name         AI 自动答题助手 - Privacy Safe
-// @namespace    https://github.com/rehuan/AI-ANSWER-ASSISTANT
+// @name         AI-Answer-Assistant
+// @name:zh-CN   AI 自动答题助手
+// @namespace    https://github.com/luoxue3943/AI-Answer-Assistant
 // @version      1.5.0
 // @description  隐私优先的 AI 自动答题助手：无站点模板，全靠本地 DOM 扫描与可选脱敏 AI 兜底；仅向用户配置的 OpenAI 兼容 API 发送必要题干/选项。
-// @author       Privacy-safe reimplementation
+// @author       珞雪
 // @license      GPL-3.0-or-later
 // @match        http://*/*
 // @match        https://*/*
@@ -18,7 +19,7 @@
 // ==/UserScript==
 
 (() => {
-  'use strict';
+  "use strict";
 
   /*
    * Privacy design
@@ -34,17 +35,17 @@
    */
 
   const APP = {
-    id: 'aia-privacy-safe',
-    name: 'AI 自动答题助手',
-    version: '1.5.0',
-    rootId: 'aia-privacy-root',
+    id: "aia-privacy-safe",
+    name: "AI 自动答题助手",
+    version: "1.5.0",
+    rootId: "aia-privacy-root",
   };
 
   const STORAGE = {
-    settings: 'aia:settings:v1',
-    models: 'aia:models:v1',
-    activeModelId: 'aia:activeModelId:v1',
-    rememberFlags: 'aia:rememberFlags:v1',
+    settings: "aia:settings:v1",
+    models: "aia:models:v1",
+    activeModelId: "aia:activeModelId:v1",
+    rememberFlags: "aia:rememberFlags:v1",
   };
 
   const DEFAULT_SETTINGS = {
@@ -65,7 +66,7 @@
     isScanning: false,
     logs: [],
     panelOpen: false,
-    activeTab: 'home',
+    activeTab: "home",
     networkEvents: [],
   };
 
@@ -76,11 +77,11 @@
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   function nowTime() {
-    return new Date().toLocaleTimeString('zh-CN', {
+    return new Date().toLocaleTimeString("zh-CN", {
       hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     });
   }
 
@@ -89,30 +90,30 @@
   }
 
   function cleanText(value, max = 1200) {
-    return String(value || '')
-      .replace(/[\r\n\t]+/g, ' ')
-      .replace(/\s+/g, ' ')
+    return String(value || "")
+      .replace(/[\r\n\t]+/g, " ")
+      .replace(/\s+/g, " ")
       .trim()
       .slice(0, max);
   }
 
   function escapeHtml(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
-  function uid(prefix = 'id') {
+  function uid(prefix = "id") {
     const bytes = new Uint8Array(8);
     crypto.getRandomValues(bytes);
-    return `${prefix}-${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+    return `${prefix}-${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
   }
 
   function tryJSON(text) {
-    let value = String(text || '').trim();
+    let value = String(text || "").trim();
     const fenced = value.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fenced) value = fenced[1].trim();
     const objectMatch = value.match(/\{[\s\S]*\}/);
@@ -122,9 +123,9 @@
 
   function wildcardMatch(url, pattern) {
     const escaped = pattern
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.');
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*")
+      .replace(/\?/g, ".");
     try {
       return new RegExp(`^${escaped}$`).test(url);
     } catch {
@@ -153,14 +154,19 @@
   function isVisible(el) {
     if (!el || !(el instanceof Element)) return false;
     const s = getComputedStyle(el);
-    if (s.display === 'none' || s.visibility === 'hidden' || Number(s.opacity) === 0) return false;
+    if (
+      s.display === "none" ||
+      s.visibility === "hidden" ||
+      Number(s.opacity) === 0
+    )
+      return false;
     const r = el.getBoundingClientRect();
     return r.width > 0 || r.height > 0;
   }
 
   function isSystemOrSensitivePage() {
     const protocol = location.protocol;
-    return !['http:', 'https:'].includes(protocol);
+    return !["http:", "https:"].includes(protocol);
   }
 
   function addLog(level, message) {
@@ -176,32 +182,36 @@
 
   function debugLog(message) {
     if (!debugEnabled()) return;
-    addLog('debug', `[DEBUG] ${cleanText(message, 6000)}`);
+    addLog("debug", `[DEBUG] ${cleanText(message, 6000)}`);
   }
 
   function debugJSON(label, value, max = 5000) {
     if (!debugEnabled()) return;
-    let json = '';
+    let json = "";
     try {
       json = JSON.stringify(value);
     } catch (error) {
       json = `[无法序列化: ${error.message}]`;
     }
-    debugLog(`${label}: ${json.slice(0, max)}${json.length > max ? ' …[截断]' : ''}`);
+    debugLog(
+      `${label}: ${json.slice(0, max)}${json.length > max ? " …[截断]" : ""}`,
+    );
   }
 
   function describeElement(el) {
-    if (!el) return 'null';
-    const tag = String(el.tagName || 'unknown').toLowerCase();
-    const type = el.getAttribute?.('type') || '';
-    const id = el.id ? `#${el.id}` : '';
-    const name = el.getAttribute?.('name') ? `[name="${el.getAttribute('name')}"]` : '';
-    return `${tag}${type ? `[type="${type}"]` : ''}${id}${name} connected=${!!el.isConnected}`;
+    if (!el) return "null";
+    const tag = String(el.tagName || "unknown").toLowerCase();
+    const type = el.getAttribute?.("type") || "";
+    const id = el.id ? `#${el.id}` : "";
+    const name = el.getAttribute?.("name")
+      ? `[name="${el.getAttribute("name")}"]`
+      : "";
+    return `${tag}${type ? `[type="${type}"]` : ""}${id}${name} connected=${!!el.isConnected}`;
   }
 
   function updateCounters() {
-    const totalEls = document.querySelectorAll('[data-aia-count-total]');
-    const answeredEls = document.querySelectorAll('[data-aia-count-answered]');
+    const totalEls = document.querySelectorAll("[data-aia-count-total]");
+    const answeredEls = document.querySelectorAll("[data-aia-count-answered]");
     totalEls.forEach((el) => (el.textContent = String(state.questions.length)));
     answeredEls.forEach((el) => (el.textContent = String(state.answeredCount)));
   }
@@ -211,11 +221,11 @@
     // v1.4 and older used "aiFallback". Migrate it silently to the new
     // force-AI-scan switch so existing users keep their previous choice.
     const aiScan =
-      typeof stored.aiScan === 'boolean'
+      typeof stored.aiScan === "boolean"
         ? stored.aiScan
-        : typeof stored.aiFallback === 'boolean'
-        ? stored.aiFallback
-        : DEFAULT_SETTINGS.aiScan;
+        : typeof stored.aiFallback === "boolean"
+          ? stored.aiFallback
+          : DEFAULT_SETTINGS.aiScan;
     return { ...DEFAULT_SETTINGS, ...stored, aiScan };
   }
 
@@ -235,11 +245,11 @@
   }
 
   function getActiveModelId() {
-    return GM_getValue(STORAGE.activeModelId, '');
+    return GM_getValue(STORAGE.activeModelId, "");
   }
 
   function setActiveModelId(id) {
-    GM_setValue(STORAGE.activeModelId, id || '');
+    GM_setValue(STORAGE.activeModelId, id || "");
   }
 
   function getRememberFlags() {
@@ -253,24 +263,24 @@
   }
 
   function setSecret(modelId, key, remember) {
-    sessionSecrets.set(modelId, key || '');
+    sessionSecrets.set(modelId, key || "");
     setRememberFlag(modelId, !!remember);
     if (remember) {
-      GM_setValue(`aia:secret:${modelId}`, key || '');
+      GM_setValue(`aia:secret:${modelId}`, key || "");
     } else {
       GM_deleteValue(`aia:secret:${modelId}`);
     }
   }
 
   function getSecret(modelId) {
-    if (sessionSecrets.has(modelId)) return sessionSecrets.get(modelId) || '';
+    if (sessionSecrets.has(modelId)) return sessionSecrets.get(modelId) || "";
     const flags = getRememberFlags();
     if (flags[modelId]) {
-      const stored = GM_getValue(`aia:secret:${modelId}`, '') || '';
+      const stored = GM_getValue(`aia:secret:${modelId}`, "") || "";
       if (stored) sessionSecrets.set(modelId, stored);
       return stored;
     }
-    return '';
+    return "";
   }
 
   function deleteSecret(modelId) {
@@ -288,34 +298,56 @@
   }
 
   function normalizedEndpoint(baseUrl) {
-    let url = String(baseUrl || '').trim().replace(/\/+$/, '');
-    if (!url) throw new Error('API Base URL 为空');
+    let url = String(baseUrl || "")
+      .trim()
+      .replace(/\/+$/, "");
+    if (!url) throw new Error("API Base URL 为空");
     let parsed;
     try {
       parsed = new URL(url);
     } catch {
-      throw new Error('API Base URL 不是有效 URL');
+      throw new Error("API Base URL 不是有效 URL");
     }
 
-    const local = ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
-    if (parsed.protocol !== 'https:' && !(local && parsed.protocol === 'http:')) {
-      throw new Error('为防止 API Key 明文泄漏，远程 API 必须使用 HTTPS（localhost/127.0.0.1 可使用 HTTP）');
+    const local = ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+    if (
+      parsed.protocol !== "https:" &&
+      !(local && parsed.protocol === "http:")
+    ) {
+      throw new Error(
+        "为防止 API Key 明文泄漏，远程 API 必须使用 HTTPS（localhost/127.0.0.1 可使用 HTTP）",
+      );
     }
 
-    if (!parsed.pathname.endsWith('/chat/completions')) {
-      parsed.pathname = `${parsed.pathname.replace(/\/+$/, '')}/chat/completions`
-        .replace(/\/{2,}/g, '/');
+    if (!parsed.pathname.endsWith("/chat/completions")) {
+      parsed.pathname =
+        `${parsed.pathname.replace(/\/+$/, "")}/chat/completions`.replace(
+          /\/{2,}/g,
+          "/",
+        );
     }
     return parsed.toString();
   }
 
   // ---------- The ONLY network function ----------
 
-  async function callOpenAICompatible({ modelConfig, apiKey, system, user, purpose, timeoutMs }) {
-    if (!modelConfig) throw new Error('未配置 AI 模型');
-    if (!apiKey) throw new Error('当前模型缺少 API Key（刷新或换页面后，会话 Key 需要重新输入）');
-    if (typeof GM_xmlhttpRequest !== 'function') {
-      throw new Error('Tampermonkey 的 GM_xmlhttpRequest 不可用，请确认脚本权限正常');
+  async function callOpenAICompatible({
+    modelConfig,
+    apiKey,
+    system,
+    user,
+    purpose,
+    timeoutMs,
+  }) {
+    if (!modelConfig) throw new Error("未配置 AI 模型");
+    if (!apiKey)
+      throw new Error(
+        "当前模型缺少 API Key（刷新或换页面后，会话 Key 需要重新输入）",
+      );
+    if (typeof GM_xmlhttpRequest !== "function") {
+      throw new Error(
+        "Tampermonkey 的 GM_xmlhttpRequest 不可用，请确认脚本权限正常",
+      );
     }
 
     const url = normalizedEndpoint(modelConfig.baseUrl);
@@ -323,18 +355,22 @@
     const bodyObject = {
       model: modelConfig.model,
       messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
+        { role: "system", content: system },
+        { role: "user", content: user },
       ],
     };
     const body = JSON.stringify(bodyObject);
     const settings = getSettings();
-    const hardTimeout = clamp(Number(timeoutMs || settings.requestTimeoutMs) || 120000, 5000, 240000);
+    const hardTimeout = clamp(
+      Number(timeoutMs || settings.requestTimeoutMs) || 120000,
+      5000,
+      240000,
+    );
 
     try {
       state.networkEvents.push({
         time: new Date().toISOString(),
-        purpose: purpose || 'AI request',
+        purpose: purpose || "AI request",
         destination: origin,
         bytes: new TextEncoder().encode(body).length,
       });
@@ -342,8 +378,13 @@
       renderPrivacy();
     } catch {}
 
-    addLog('info', `API 请求开始：${origin}（超时 ${Math.round(hardTimeout / 1000)} 秒）`);
-    debugLog(`API request purpose=${purpose || 'AI request'}, model=${modelConfig.model}, endpoint=${url}, bodyBytes=${new TextEncoder().encode(body).length}`);
+    addLog(
+      "info",
+      `API 请求开始：${origin}（超时 ${Math.round(hardTimeout / 1000)} 秒）`,
+    );
+    debugLog(
+      `API request purpose=${purpose || "AI request"}, model=${modelConfig.model}, endpoint=${url}, bodyBytes=${new TextEncoder().encode(body).length}`,
+    );
 
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -358,24 +399,28 @@
       };
 
       const fail = (message) => {
-        addLog('error', message);
+        addLog("error", message);
         finish(reject, new Error(message));
       };
 
       const watchdog = setTimeout(() => {
-        try { requestHandle?.abort?.(); } catch {}
-        fail(`API 在 ${Math.round(hardTimeout / 1000)} 秒内没有返回完整响应：${origin}`);
+        try {
+          requestHandle?.abort?.();
+        } catch {}
+        fail(
+          `API 在 ${Math.round(hardTimeout / 1000)} 秒内没有返回完整响应：${origin}`,
+        );
       }, hardTimeout + 750);
 
       try {
         requestHandle = GM_xmlhttpRequest({
-          method: 'POST',
+          method: "POST",
           url,
           timeout: hardTimeout,
           headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${apiKey}`,
           },
           data: body,
           anonymous: true,
@@ -384,57 +429,84 @@
             const readyState = Number(response?.readyState);
             if (Number.isFinite(readyState) && readyState !== lastReadyState) {
               lastReadyState = readyState;
-              debugLog(`XHR readyState=${readyState}, status=${Number(response?.status) || 0}`);
+              debugLog(
+                `XHR readyState=${readyState}, status=${Number(response?.status) || 0}`,
+              );
             }
           },
           onload: (response) => {
             if (settled) return;
             const status = Number(response.status) || 0;
-            addLog('info', `API 已响应：HTTP ${status || '未知'}`);
-            debugLog(`HTTP response status=${status}, bytes=${String(response.responseText || '').length}, finalUrl=${response.finalUrl || url}`);
+            addLog("info", `API 已响应：HTTP ${status || "未知"}`);
+            debugLog(
+              `HTTP response status=${status}, bytes=${String(response.responseText || "").length}, finalUrl=${response.finalUrl || url}`,
+            );
             if (debugEnabled()) {
-              const preview = String(response.responseText || '').slice(0, 3500);
-              debugLog(`HTTP 原始响应预览: ${preview}${String(response.responseText || '').length > 3500 ? ' …[截断]' : ''}`);
+              const preview = String(response.responseText || "").slice(
+                0,
+                3500,
+              );
+              debugLog(
+                `HTTP 原始响应预览: ${preview}${String(response.responseText || "").length > 3500 ? " …[截断]" : ""}`,
+              );
             }
 
             if (status < 200 || status >= 300) {
-              let detail = '';
+              let detail = "";
               try {
-                const err = JSON.parse(response.responseText || '{}');
-                detail = err?.error?.message || err?.message || '';
+                const err = JSON.parse(response.responseText || "{}");
+                detail = err?.error?.message || err?.message || "";
               } catch {
-                detail = cleanText(response.responseText || '', 300);
+                detail = cleanText(response.responseText || "", 300);
               }
-              if (status === 0) return fail('API 返回状态 0：常见原因是 @connect 权限未允许、TLS/证书失败或网络被拦截');
-              if (status === 401) return fail('API Key 无效或鉴权失败（HTTP 401）');
-              if (status === 403) return fail('API 拒绝访问（HTTP 403）');
-              if (status === 404) return fail(`API 路径不存在（HTTP 404）：当前请求 ${url}`);
-              if (status === 429) return fail('API 请求过于频繁或额度不足（HTTP 429）');
-              return fail(`API 请求失败（HTTP ${status}）${detail ? `：${detail}` : ''}`);
+              if (status === 0)
+                return fail(
+                  "API 返回状态 0：常见原因是 @connect 权限未允许、TLS/证书失败或网络被拦截",
+                );
+              if (status === 401)
+                return fail("API Key 无效或鉴权失败（HTTP 401）");
+              if (status === 403) return fail("API 拒绝访问（HTTP 403）");
+              if (status === 404)
+                return fail(`API 路径不存在（HTTP 404）：当前请求 ${url}`);
+              if (status === 429)
+                return fail("API 请求过于频繁或额度不足（HTTP 429）");
+              return fail(
+                `API 请求失败（HTTP ${status}）${detail ? `：${detail}` : ""}`,
+              );
             }
 
             try {
-              const data = JSON.parse(response.responseText || '{}');
+              const data = JSON.parse(response.responseText || "{}");
               const content = data?.choices?.[0]?.message?.content;
-              if (typeof content !== 'string') {
-                const keys = Object.keys(data || {}).slice(0, 8).join(', ') || '空响应';
-                return fail(`API 返回格式不是 OpenAI Chat Completions（顶层字段：${keys}）`);
+              if (typeof content !== "string") {
+                const keys =
+                  Object.keys(data || {})
+                    .slice(0, 8)
+                    .join(", ") || "空响应";
+                return fail(
+                  `API 返回格式不是 OpenAI Chat Completions（顶层字段：${keys}）`,
+                );
               }
               debugLog(`Chat Completions content 长度=${content.length}`);
-              debugLog(`模型 content 预览: ${content.slice(0, 3000)}${content.length > 3000 ? ' …[截断]' : ''}`);
-              addLog('success', 'API 调用成功');
+              debugLog(
+                `模型 content 预览: ${content.slice(0, 3000)}${content.length > 3000 ? " …[截断]" : ""}`,
+              );
+              addLog("success", "API 调用成功");
               finish(resolve, content);
             } catch (error) {
               fail(`API 响应 JSON 解析失败：${error.message}`);
             }
           },
-          ontimeout: () => fail(`API 请求超时（${Math.round(hardTimeout / 1000)} 秒）`),
+          ontimeout: () =>
+            fail(`API 请求超时（${Math.round(hardTimeout / 1000)} 秒）`),
           onerror: (response) => {
             const status = Number(response?.status) || 0;
-            fail(`API 网络错误${status ? `（HTTP ${status}）` : ''}：请检查域名、证书、代理和 Tampermonkey @connect 权限`);
+            fail(
+              `API 网络错误${status ? `（HTTP ${status}）` : ""}：请检查域名、证书、代理和 Tampermonkey @connect 权限`,
+            );
           },
           onabort: () => {
-            if (!settled) fail('API 请求被中止');
+            if (!settled) fail("API 请求被中止");
           },
         });
       } catch (error) {
@@ -455,10 +527,10 @@
 
   // Local-only locator. Never sent to AI.
   function makeLocalSelector(element) {
-    if (!element || !(element instanceof Element)) return '';
+    if (!element || !(element instanceof Element)) return "";
     if (element.id) return `#${cssEsc(element.id)}`;
 
-    for (const attr of ['data-question-id', 'topic', 'data-id']) {
+    for (const attr of ["data-question-id", "topic", "data-id"]) {
       const value = element.getAttribute(attr);
       if (!value) continue;
       const escaped = String(value).replace(/"/g, '\\"');
@@ -470,17 +542,24 @@
 
     const path = [];
     let current = element;
-    for (let depth = 0; current && current !== document.body && depth < 7; depth++) {
+    for (
+      let depth = 0;
+      current && current !== document.body && depth < 7;
+      depth++
+    ) {
       let part = current.tagName.toLowerCase();
       const parent = current.parentElement;
       if (parent) {
-        const sameTag = Array.from(parent.children).filter((x) => x.tagName === current.tagName);
-        if (sameTag.length > 1) part += `:nth-of-type(${sameTag.indexOf(current) + 1})`;
+        const sameTag = Array.from(parent.children).filter(
+          (x) => x.tagName === current.tagName,
+        );
+        if (sameTag.length > 1)
+          part += `:nth-of-type(${sameTag.indexOf(current) + 1})`;
       }
       path.unshift(part);
       current = parent;
     }
-    return path.length ? `body > ${path.join(' > ')}` : '';
+    return path.length ? `body > ${path.join(" > ")}` : "";
   }
 
   function getLiveElement(element, locator) {
@@ -493,35 +572,40 @@
   }
 
   const QUESTION_HINT_SELECTOR = [
-    '.question',
-    '.question-item',
-    '.exam-question',
-    '.test-question',
-    '.quiz-question',
-    '.problem',
-    '.problem-item',
-    '.exercise',
-    '.exercise-item',
-    '[data-question-id]',
-    '[data-question]',
+    ".question",
+    ".question-item",
+    ".exam-question",
+    ".test-question",
+    ".quiz-question",
+    ".problem",
+    ".problem-item",
+    ".exercise",
+    ".exercise-item",
+    "[data-question-id]",
+    "[data-question]",
     '[class*="question"]',
     '[class*="Question"]',
     '[class*="problem"]',
     '[class*="Problem"]',
-  ].join(',');
+  ].join(",");
 
   function isAnswerInput(el) {
     if (!el || !(el instanceof HTMLElement)) return false;
     if (el.disabled || el.readOnly) return false;
     const tag = el.tagName;
-    if (tag === 'TEXTAREA') return true;
+    if (tag === "TEXTAREA") return true;
     if (el.isContentEditable) return true;
-    if (tag !== 'INPUT') return false;
-    const type = (el.getAttribute('type') || 'text').toLowerCase();
-    if (['radio', 'checkbox'].includes(type)) return true;
-    if (!['text', 'number', 'tel', 'url'].includes(type)) return false;
-    const hint = `${el.name || ''} ${el.id || ''} ${el.placeholder || ''}`.toLowerCase();
-    if (/(search|keyword|user|account|login|phone|mobile|email|captcha|verify|password|name|姓名|学号|工号)/i.test(hint)) {
+    if (tag !== "INPUT") return false;
+    const type = (el.getAttribute("type") || "text").toLowerCase();
+    if (["radio", "checkbox"].includes(type)) return true;
+    if (!["text", "number", "tel", "url"].includes(type)) return false;
+    const hint =
+      `${el.name || ""} ${el.id || ""} ${el.placeholder || ""}`.toLowerCase();
+    if (
+      /(search|keyword|user|account|login|phone|mobile|email|captcha|verify|password|name|姓名|学号|工号)/i.test(
+        hint,
+      )
+    ) {
       return false;
     }
     return true;
@@ -529,9 +613,9 @@
 
   function isUsableFillInput(el) {
     if (!isAnswerInput(el)) return false;
-    const type = (el.getAttribute?.('type') || '').toLowerCase();
-    if (['radio', 'checkbox'].includes(type)) return false;
-    if (el.hidden || el.getAttribute?.('aria-hidden') === 'true') return false;
+    const type = (el.getAttribute?.("type") || "").toLowerCase();
+    if (["radio", "checkbox"].includes(type)) return false;
+    if (el.hidden || el.getAttribute?.("aria-hidden") === "true") return false;
     if (!isVisible(el)) return false;
 
     const rect = el.getBoundingClientRect?.();
@@ -542,27 +626,31 @@
 
   function isScannableControl(el) {
     if (!isAnswerInput(el)) return false;
-    const type = (el.getAttribute?.('type') || '').toLowerCase();
-    if (['radio', 'checkbox'].includes(type)) return true;
+    const type = (el.getAttribute?.("type") || "").toLowerCase();
+    if (["radio", "checkbox"].includes(type)) return true;
     return isUsableFillInput(el);
   }
 
   function getControlLabel(input) {
-    if (!input) return '';
-    const aria = input.getAttribute?.('aria-label');
+    if (!input) return "";
+    const aria = input.getAttribute?.("aria-label");
     if (aria) return cleanText(aria, 500);
 
     if (input.id) {
       try {
-        const label = document.querySelector(`label[for="${CSS.escape(input.id)}"]`);
+        const label = document.querySelector(
+          `label[for="${CSS.escape(input.id)}"]`,
+        );
         if (label) return cleanText(label.textContent, 500);
       } catch {}
     }
 
-    const closest = input.closest?.('label');
+    const closest = input.closest?.("label");
     if (closest) {
       const clone = closest.cloneNode(true);
-      safeQueryAll(clone, 'input,textarea,select,button').forEach((x) => x.remove());
+      safeQueryAll(clone, "input,textarea,select,button").forEach((x) =>
+        x.remove(),
+      );
       return cleanText(clone.textContent, 500);
     }
 
@@ -577,27 +665,41 @@
       const text = cleanText(next.textContent, 500);
       if (text) return text;
     }
-    return '';
+    return "";
   }
 
   function closestReasonableContainer(element) {
     if (!element) return null;
 
     const hinted = element.closest?.(QUESTION_HINT_SELECTOR);
-    if (hinted && hinted !== document.body && cleanText(hinted.textContent).length <= 5000) return hinted;
+    if (
+      hinted &&
+      hinted !== document.body &&
+      cleanText(hinted.textContent).length <= 5000
+    )
+      return hinted;
 
-    const input = element.matches?.('input,textarea') ? element : safeQuery(element, 'input,textarea');
+    const input = element.matches?.("input,textarea")
+      ? element
+      : safeQuery(element, "input,textarea");
     const groupName = input?.name || null;
     let current = element.parentElement;
     let best = null;
 
-    for (let depth = 0; current && current !== document.body && depth < 8; depth++, current = current.parentElement) {
+    for (
+      let depth = 0;
+      current && current !== document.body && depth < 8;
+      depth++, current = current.parentElement
+    ) {
       const textLen = cleanText(current.textContent, 10000).length;
       if (textLen > 6000) break;
 
       const radios = safeQueryAll(current, 'input[type="radio"]');
       const checks = safeQueryAll(current, 'input[type="checkbox"]');
-      const texts = safeQueryAll(current, 'input,textarea,[contenteditable="true"]').filter(isUsableFillInput);
+      const texts = safeQueryAll(
+        current,
+        'input,textarea,[contenteditable="true"]',
+      ).filter(isUsableFillInput);
       const interactiveCount = radios.length + checks.length + texts.length;
 
       if (interactiveCount >= 1 && interactiveCount <= 30) {
@@ -605,7 +707,9 @@
       }
 
       if (groupName) {
-        const names = new Set([...radios, ...checks].map((x) => x.name).filter(Boolean));
+        const names = new Set(
+          [...radios, ...checks].map((x) => x.name).filter(Boolean),
+        );
         if (names.size > 1 && !names.has(groupName)) break;
         if (names.size > 1) break;
       }
@@ -617,21 +721,21 @@
   }
 
   function extractQuestionText(container) {
-    if (!container) return '';
+    if (!container) return "";
 
     const preferred = [
-      '.question-title',
-      '.question-text',
-      '.question-stem',
-      '.stem',
-      '.title',
-      '.topic',
-      '.subject',
-      'legend',
-      'h1',
-      'h2',
-      'h3',
-      'h4',
+      ".question-title",
+      ".question-text",
+      ".question-stem",
+      ".stem",
+      ".title",
+      ".topic",
+      ".subject",
+      "legend",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
       '[class*="title"]',
       '[class*="stem"]',
     ];
@@ -647,16 +751,19 @@
     const optionTexts = new Set(
       safeQueryAll(container, 'input[type="radio"],input[type="checkbox"]')
         .map(getControlLabel)
-        .filter(Boolean)
+        .filter(Boolean),
     );
 
     const clone = container.cloneNode(true);
-    safeQueryAll(clone, 'script,style,svg,img,video,audio,button,select').forEach((el) => el.remove());
-    safeQueryAll(clone, 'input,textarea').forEach((el) => el.remove());
+    safeQueryAll(
+      clone,
+      "script,style,svg,img,video,audio,button,select",
+    ).forEach((el) => el.remove());
+    safeQueryAll(clone, "input,textarea").forEach((el) => el.remove());
     let text = cleanText(clone.textContent, 1800);
 
     for (const option of optionTexts) {
-      if (option.length >= 2) text = text.replace(option, ' ');
+      if (option.length >= 2) text = text.replace(option, " ");
     }
 
     text = cleanText(text, 1200);
@@ -666,8 +773,10 @@
   }
 
   function collectFillInputs(root) {
-    return safeQueryAll(root || document, 'textarea,input,[contenteditable="true"]')
-      .filter(isUsableFillInput);
+    return safeQueryAll(
+      root || document,
+      'textarea,input,[contenteditable="true"]',
+    ).filter(isUsableFillInput);
   }
 
   function isQuestionLikeContainer(el) {
@@ -676,10 +785,10 @@
       if (el.matches?.(QUESTION_HINT_SELECTOR)) return true;
     } catch {}
     return (
-      el.hasAttribute?.('topic') ||
-      el.hasAttribute?.('data-question-id') ||
-      el.hasAttribute?.('data-question') ||
-      el.getAttribute?.('role') === 'group'
+      el.hasAttribute?.("topic") ||
+      el.hasAttribute?.("data-question-id") ||
+      el.hasAttribute?.("data-question") ||
+      el.getAttribute?.("role") === "group"
     );
   }
 
@@ -688,13 +797,25 @@
     let bestSingle = null;
     let bestMulti = null;
 
-    for (let depth = 0; current && current !== document.body && depth < 10; depth++, current = current.parentElement) {
+    for (
+      let depth = 0;
+      current && current !== document.body && depth < 10;
+      depth++, current = current.parentElement
+    ) {
       const fills = collectFillInputs(current);
-      const choiceCount = safeQueryAll(current, 'input[type="radio"],input[type="checkbox"]').length;
+      const choiceCount = safeQueryAll(
+        current,
+        'input[type="radio"],input[type="checkbox"]',
+      ).length;
       const textLen = cleanText(current.textContent, 7000).length;
       const totalInteractive = fills.length + choiceCount;
 
-      if (fills.includes(input) && fills.length >= 1 && fills.length <= 20 && textLen <= 4500) {
+      if (
+        fills.includes(input) &&
+        fills.length >= 1 &&
+        fills.length <= 20 &&
+        textLen <= 4500
+      ) {
         if (fills.length === 1 && totalInteractive === 1) bestSingle = current;
         if (fills.length >= 2) bestMulti = current;
 
@@ -714,33 +835,45 @@
     if (!fills?.length) return false;
 
     const text = cleanText(extractQuestionText(container), 1000);
-    if (/(简答题|简答|论述题|论述|请说明|请简述|请阐述|请分析|请描述|说明.*要求|谈谈|为什么|如何理解)/i.test(text)) {
+    if (
+      /(简答题|简答|论述题|论述|请说明|请简述|请阐述|请分析|请描述|说明.*要求|谈谈|为什么|如何理解)/i.test(
+        text,
+      )
+    ) {
       return true;
     }
 
     // A visibly large multiline text area is normally a short-answer / essay field.
     return fills.some((el) => {
-      if (!(el instanceof HTMLTextAreaElement) && !el.isContentEditable) return false;
+      if (!(el instanceof HTMLTextAreaElement) && !el.isContentEditable)
+        return false;
       const rect = el.getBoundingClientRect?.();
-      const rows = Number(el.getAttribute?.('rows')) || 0;
+      const rows = Number(el.getAttribute?.("rows")) || 0;
       return rows >= 3 || (rect && rect.height >= 70);
     });
   }
 
   function parseNativeQuestion(container, index) {
-    const radios = safeQueryAll(container, 'input[type="radio"]').filter(isAnswerInput);
-    const checks = safeQueryAll(container, 'input[type="checkbox"]').filter(isAnswerInput);
-    const fills = safeQueryAll(container, 'textarea,input,[contenteditable="true"]')
-      .filter(isUsableFillInput);
+    const radios = safeQueryAll(container, 'input[type="radio"]').filter(
+      isAnswerInput,
+    );
+    const checks = safeQueryAll(container, 'input[type="checkbox"]').filter(
+      isAnswerInput,
+    );
+    const fills = safeQueryAll(
+      container,
+      'textarea,input,[contenteditable="true"]',
+    ).filter(isUsableFillInput);
 
     let type = null;
-    if (radios.length >= 2) type = 'single';
-    else if (checks.length >= 2) type = 'multiple';
-    else if (fills.length >= 1) type = isEssayLikeQuestion(container, fills) ? 'essay' : 'fill';
+    if (radios.length >= 2) type = "single";
+    else if (checks.length >= 2) type = "multiple";
+    else if (fills.length >= 1)
+      type = isEssayLikeQuestion(container, fills) ? "essay" : "fill";
     else return null;
 
     const question = {
-      id: uid('q'),
+      id: uid("q"),
       index,
       type,
       text: extractQuestionText(container),
@@ -751,10 +884,12 @@
       answered: false,
     };
 
-    if (type === 'single' || type === 'multiple') {
-      const controls = type === 'single' ? radios : checks;
+    if (type === "single" || type === "multiple") {
+      const controls = type === "single" ? radios : checks;
       const groupName = controls[0]?.name;
-      const group = groupName ? controls.filter((x) => x.name === groupName) : controls;
+      const group = groupName
+        ? controls.filter((x) => x.name === groupName)
+        : controls;
       question.options = group.slice(0, 26).map((element, i) => ({
         label: String.fromCharCode(65 + i),
         text: getControlLabel(element) || `选项 ${String.fromCharCode(65 + i)}`,
@@ -797,7 +932,7 @@
       const key = `${q.type}:${cleanText(q.text, 220).toLowerCase()}`;
       const existing = byKey.get(key);
 
-      if (existing && q.type === 'fill' && existing.type === 'fill') {
+      if (existing && q.type === "fill" && existing.type === "fill") {
         const seen = new Set(existing.inputs.map((x) => x.element));
         for (const input of q.inputs || []) {
           if (input?.element && !seen.has(input.element)) {
@@ -824,14 +959,18 @@
   function scanGenericLocally() {
     const allCandidateControls = safeQueryAll(
       document,
-      'input[type="radio"],input[type="checkbox"],textarea,input[type="text"],input[type="number"],input:not([type]),[contenteditable="true"]'
+      'input[type="radio"],input[type="checkbox"],textarea,input[type="text"],input[type="number"],input:not([type]),[contenteditable="true"]',
     );
     const controls = allCandidateControls.filter(isScannableControl);
 
     if (debugEnabled()) {
       const hiddenFillCount = allCandidateControls.filter((el) => {
-        const type = (el.getAttribute?.('type') || '').toLowerCase();
-        return !['radio', 'checkbox'].includes(type) && isAnswerInput(el) && !isUsableFillInput(el);
+        const type = (el.getAttribute?.("type") || "").toLowerCase();
+        return (
+          !["radio", "checkbox"].includes(type) &&
+          isAnswerInput(el) &&
+          !isUsableFillInput(el)
+        );
       }).length;
       debugLog(`DOM 扫描：过滤隐藏/不可见填空控件 ${hiddenFillCount} 个`);
     }
@@ -842,9 +981,14 @@
     debugLog(`DOM 扫描：候选可答控件 ${controls.length} 个`);
 
     for (const control of controls) {
-      const type = (control.getAttribute?.('type') || '').toLowerCase();
-      const isFill = control.tagName === 'TEXTAREA' || control.isContentEditable || !['radio', 'checkbox'].includes(type);
-      const container = isFill ? closestFillQuestionContainer(control) : closestReasonableContainer(control);
+      const type = (control.getAttribute?.("type") || "").toLowerCase();
+      const isFill =
+        control.tagName === "TEXTAREA" ||
+        control.isContentEditable ||
+        !["radio", "checkbox"].includes(type);
+      const container = isFill
+        ? closestFillQuestionContainer(control)
+        : closestReasonableContainer(control);
       if (container && !containerSet.has(container)) {
         containerSet.add(container);
         containers.push(container);
@@ -858,18 +1002,28 @@
           other !== candidate &&
           candidate.contains(other) &&
           cleanText(other.textContent).length > 5 &&
-          safeQueryAll(other, 'input,textarea,[contenteditable="true"]').some(isScannableControl)
+          safeQueryAll(other, 'input,textarea,[contenteditable="true"]').some(
+            isScannableControl,
+          ),
       );
     });
 
-    debugLog(`DOM 扫描：候选容器 ${containers.length} 个，裁剪后 ${pruned.length} 个`);
-    const questions = dedupeQuestions(pruned.map(parseNativeQuestion).filter(Boolean));
+    debugLog(
+      `DOM 扫描：候选容器 ${containers.length} 个，裁剪后 ${pruned.length} 个`,
+    );
+    const questions = dedupeQuestions(
+      pruned.map(parseNativeQuestion).filter(Boolean),
+    );
 
     questions.forEach((q, i) => {
-      debugLog(`扫描结果 #${i + 1}: type=${q.type}, options=${q.options?.length || 0}, inputs=${q.inputs?.length || 0}, text=${cleanText(q.text, 120)}`);
-      if (q.type === 'fill' || q.type === 'essay') {
+      debugLog(
+        `扫描结果 #${i + 1}: type=${q.type}, options=${q.options?.length || 0}, inputs=${q.inputs?.length || 0}, text=${cleanText(q.text, 120)}`,
+      );
+      if (q.type === "fill" || q.type === "essay") {
         (q.inputs || []).forEach((input, inputIndex) => {
-          debugLog(`  填空 ${inputIndex + 1}: ${describeElement(input.element)} locator=${input.locator || '-'}`);
+          debugLog(
+            `  填空 ${inputIndex + 1}: ${describeElement(input.element)} locator=${input.locator || "-"}`,
+          );
         });
       }
     });
@@ -881,7 +1035,7 @@
   function buildSanitizedInteractiveSketch() {
     const controls = safeQueryAll(
       document,
-      'input[type="radio"],input[type="checkbox"],textarea,input[type="text"],input[type="number"],input:not([type]),[contenteditable="true"]'
+      'input[type="radio"],input[type="checkbox"],textarea,input[type="text"],input[type="number"],input:not([type]),[contenteditable="true"]',
     ).filter(isScannableControl);
 
     const blocks = [];
@@ -889,11 +1043,11 @@
     const refMap = new Map();
 
     controls.slice(0, 320).forEach((control) => {
-      const inputType = (control.getAttribute?.('type') || '').toLowerCase();
+      const inputType = (control.getAttribute?.("type") || "").toLowerCase();
       const isTextControl =
-        control.tagName === 'TEXTAREA' ||
+        control.tagName === "TEXTAREA" ||
         control.isContentEditable ||
-        !['radio', 'checkbox'].includes(inputType);
+        !["radio", "checkbox"].includes(inputType);
 
       // Text fields use the dedicated question-boundary finder; this is important
       // for one-blank questions that generic grouping can accidentally swallow.
@@ -905,7 +1059,7 @@
       let block = blockMap.get(container);
       if (!block) {
         block = {
-          blockRef: uid('b'),
+          blockRef: uid("b"),
           text: extractQuestionText(container),
           controls: [],
           element: container,
@@ -914,20 +1068,24 @@
         blocks.push(block);
       }
 
-      const ref = uid('e');
+      const ref = uid("e");
       refMap.set(ref, control);
       const rect = control.getBoundingClientRect?.();
       const kind = control.isContentEditable
-        ? 'contenteditable'
-        : (control.getAttribute?.('type') || control.tagName || 'text').toLowerCase();
+        ? "contenteditable"
+        : (
+            control.getAttribute?.("type") ||
+            control.tagName ||
+            "text"
+          ).toLowerCase();
 
       block.controls.push({
         ref,
         kind,
         label: getControlLabel(control),
-        multiline: control.tagName === 'TEXTAREA' || control.isContentEditable,
+        multiline: control.tagName === "TEXTAREA" || control.isContentEditable,
         largeTextArea:
-          (control.tagName === 'TEXTAREA' || control.isContentEditable) &&
+          (control.tagName === "TEXTAREA" || control.isContentEditable) &&
           !!rect &&
           rect.height >= 70,
       });
@@ -942,15 +1100,17 @@
         controls: b.controls.slice(0, 32),
       }));
 
-    debugLog(`AI 扫描候选：${payloadBlocks.length} 个题目块，${controls.length} 个可答控件`);
+    debugLog(
+      `AI 扫描候选：${payloadBlocks.length} 个题目块，${controls.length} 个可答控件`,
+    );
     return { payloadBlocks, refMap, blocks };
   }
 
   async function scanWithSanitizedAI() {
     const model = getActiveModel();
-    if (!model) throw new Error('没有可用 AI 模型，无法进行 AI 扫描');
+    if (!model) throw new Error("没有可用 AI 模型，无法进行 AI 扫描");
     const apiKey = getSecret(model.id);
-    if (!apiKey) throw new Error('当前模型没有 API Key');
+    if (!apiKey) throw new Error("当前模型没有 API Key");
 
     const { payloadBlocks, refMap, blocks } = buildSanitizedInteractiveSketch();
     if (!payloadBlocks.length) return [];
@@ -981,7 +1141,7 @@
 - inputs 的数量必须与这个题目实际使用的可见输入控件一致。
 - 不需要给答案。`;
 
-    debugJSON('AI 扫描发送的脱敏题目块', { blocks: payloadBlocks }, 10000);
+    debugJSON("AI 扫描发送的脱敏题目块", { blocks: payloadBlocks }, 10000);
 
     const user = JSON.stringify({ blocks: payloadBlocks });
     const raw = await callOpenAICompatible({
@@ -989,23 +1149,26 @@
       apiKey,
       system,
       user,
-      purpose: 'forced-ai-structure-scan',
-      timeoutMs: Math.max(Number(getSettings().requestTimeoutMs) || 120000, 120000),
+      purpose: "forced-ai-structure-scan",
+      timeoutMs: Math.max(
+        Number(getSettings().requestTimeoutMs) || 120000,
+        120000,
+      ),
     });
 
     const parsed = tryJSON(raw);
-    debugJSON('AI 扫描结构响应', parsed, 10000);
+    debugJSON("AI 扫描结构响应", parsed, 10000);
 
     const questions = [];
 
     for (const [index, q] of (parsed.questions || []).entries()) {
-      if (!['single', 'multiple', 'fill', 'essay'].includes(q.type)) continue;
+      if (!["single", "multiple", "fill", "essay"].includes(q.type)) continue;
 
       const block = blocks.find((b) => b.blockRef === q.blockRef);
       if (!block) continue;
 
       const item = {
-        id: uid('q'),
+        id: uid("q"),
         index,
         type: q.type,
         text: cleanText(q.text || block.text, 1400),
@@ -1016,13 +1179,16 @@
         answered: false,
       };
 
-      if (q.type === 'single' || q.type === 'multiple') {
+      if (q.type === "single" || q.type === "multiple") {
         item.options = (q.options || [])
           .map((opt, i) => {
             const element = refMap.get(opt.ref);
             if (!element) return null;
             return {
-              label: cleanText(opt.label || String.fromCharCode(65 + i), 10).toUpperCase(),
+              label: cleanText(
+                opt.label || String.fromCharCode(65 + i),
+                10,
+              ).toUpperCase(),
               text: cleanText(opt.text || getControlLabel(element), 600),
               element,
               locator: makeLocalSelector(element),
@@ -1045,10 +1211,12 @@
     }
 
     const deduped = dedupeQuestions(questions);
-    debugLog(`AI 扫描解析完成：模型返回 ${questions.length} 题，去重后 ${deduped.length} 题`);
+    debugLog(
+      `AI 扫描解析完成：模型返回 ${questions.length} 题，去重后 ${deduped.length} 题`,
+    );
     deduped.forEach((q, i) => {
       debugLog(
-        `AI扫描 #${i + 1}: type=${q.type}, options=${q.options.length}, inputs=${q.inputs.length}, text=${cleanText(q.text, 120)}`
+        `AI扫描 #${i + 1}: type=${q.type}, options=${q.options.length}, inputs=${q.inputs.length}, text=${cleanText(q.text, 120)}`,
       );
     });
     return deduped;
@@ -1064,34 +1232,38 @@
       let questions = [];
 
       if (settings.aiScan) {
-        addLog('info', 'AI 扫描已开启：强制使用 AI 识别全部题目结构');
+        addLog("info", "AI 扫描已开启：强制使用 AI 识别全部题目结构");
         const model = getActiveModel();
-        const key = model ? getSecret(model.id) : '';
+        const key = model ? getSecret(model.id) : "";
         if (!model || !key) {
-          throw new Error('AI 扫描已开启，但当前模型或 API Key 不可用');
+          throw new Error("AI 扫描已开启，但当前模型或 API Key 不可用");
         }
 
         questions = await scanWithSanitizedAI();
         if (questions.length) {
-          addLog('success', `AI 扫描完成：${questions.length} 题`);
+          addLog("success", `AI 扫描完成：${questions.length} 题`);
         }
       } else {
-        addLog('info', 'AI 扫描已关闭：仅使用本地 DOM 识别');
+        addLog("info", "AI 扫描已关闭：仅使用本地 DOM 识别");
         questions = scanGenericLocally();
         if (questions.length) {
-          addLog('success', `本地 DOM 扫描完成：${questions.length} 题`);
+          addLog("success", `本地 DOM 扫描完成：${questions.length} 题`);
         }
       }
 
-      state.questions = questions.map((q, i) => ({ ...q, index: i, answered: false }));
+      state.questions = questions.map((q, i) => ({
+        ...q,
+        index: i,
+        answered: false,
+      }));
       state.answeredCount = 0;
       updateCounters();
 
       if (!state.questions.length) {
-        addLog('warning', '未发现可识别的单选、多选、填空或简答题');
+        addLog("warning", "未发现可识别的单选、多选、填空或简答题");
       }
     } catch (error) {
-      addLog('error', `扫描失败：${error.message}`);
+      addLog("error", `扫描失败：${error.message}`);
     } finally {
       state.isScanning = false;
       renderHome();
@@ -1117,15 +1289,15 @@
 
   async function askAnswer(question) {
     const model = getActiveModel();
-    if (!model) throw new Error('请先添加并选择 AI 模型');
+    if (!model) throw new Error("请先添加并选择 AI 模型");
     const apiKey = getSecret(model.id);
-    if (!apiKey) throw new Error('当前模型没有 API Key，请在“模型”页重新输入');
+    if (!apiKey) throw new Error("当前模型没有 API Key，请在“模型”页重新输入");
 
     // Count live, visible fields at request time. Some pages contain hidden helper inputs
     // or re-render their DOM after scanning.
     const visibleBlankCount =
-      question.type === 'fill'
-        ? (getLiveFillInputs(question).length || question.inputs.length || 1)
+      question.type === "fill"
+        ? getLiveFillInputs(question).length || question.inputs.length || 1
         : undefined;
 
     const payload = {
@@ -1138,18 +1310,23 @@
         })) || [],
       blanks: visibleBlankCount,
       responseFields:
-        question.type === 'essay'
-          ? (getLiveFillInputs(question).length || question.inputs.length || 1)
+        question.type === "essay"
+          ? getLiveFillInputs(question).length || question.inputs.length || 1
           : undefined,
     };
 
     const configuredTimeout = Number(getSettings().requestTimeoutMs) || 120000;
-    const isReasoningModel = /reasoner|reasoning|\br1\b/i.test(String(model.model || ''));
+    const isReasoningModel = /reasoner|reasoning|\br1\b/i.test(
+      String(model.model || ""),
+    );
     const answerTimeout = isReasoningModel
       ? Math.max(configuredTimeout, 180000)
       : Math.max(configuredTimeout, 120000);
 
-    const makeRequest = async ({ correction = false, previousAnswer = undefined } = {}) => {
+    const makeRequest = async ({
+      correction = false,
+      previousAnswer = undefined,
+    } = {}) => {
       const requestPayload = correction
         ? {
             ...payload,
@@ -1159,15 +1336,24 @@
         : payload;
 
       if (correction) {
-        addLog('warning', `正在自动纠正模型输出：本题只有 ${visibleBlankCount} 个可见空`);
+        addLog(
+          "warning",
+          `正在自动纠正模型输出：本题只有 ${visibleBlankCount} 个可见空`,
+        );
       } else {
-        addLog('info', `等待模型回答（本题最长 ${Math.round(answerTimeout / 1000)} 秒）…`);
+        addLog(
+          "info",
+          `等待模型回答（本题最长 ${Math.round(answerTimeout / 1000)} 秒）…`,
+        );
       }
 
-      debugJSON(correction ? '纠正请求 payload' : '答题请求 payload', requestPayload);
+      debugJSON(
+        correction ? "纠正请求 payload" : "答题请求 payload",
+        requestPayload,
+      );
 
       const strictSystem =
-        question.type === 'fill'
+        question.type === "fill"
           ? `${ANSWER_SYSTEM}
 【本题额外硬规则】
 - 页面实际有 ${visibleBlankCount} 个可见填空框。
@@ -1180,7 +1366,7 @@
         apiKey,
         system: strictSystem,
         user: JSON.stringify(requestPayload),
-        purpose: correction ? 'answer-question-correction' : 'answer-question',
+        purpose: correction ? "answer-question-correction" : "answer-question",
         timeoutMs: answerTimeout,
       });
 
@@ -1191,42 +1377,50 @@
         debugLog(`模型原始 content 无法解析为 JSON: ${raw.slice(0, 4000)}`);
         throw error;
       }
-      debugJSON(correction ? '纠正后的答案 JSON' : '解析后的答案 JSON', parsed);
+      debugJSON(correction ? "纠正后的答案 JSON" : "解析后的答案 JSON", parsed);
       return parsed;
     };
 
     let parsed = await makeRequest();
 
-    if (question.type === 'essay') {
+    if (question.type === "essay") {
       const liveInputs = getLiveFillInputs(question);
-      if (!liveInputs.length) throw new Error('找不到简答题输入框');
+      if (!liveInputs.length) throw new Error("找不到简答题输入框");
 
       const answer = Array.isArray(answerObj.answer)
-        ? answerObj.answer.map((x) => String(x ?? '').trim()).filter(Boolean).join('\n')
-        : String(answerObj.answer ?? '').trim();
+        ? answerObj.answer
+            .map((x) => String(x ?? "").trim())
+            .filter(Boolean)
+            .join("\n")
+        : String(answerObj.answer ?? "").trim();
 
-      if (!answer) throw new Error('AI 返回的简答题答案为空');
+      if (!answer) throw new Error("AI 返回的简答题答案为空");
 
-      debugLog(`简答题写入：inputs=${liveInputs.length}, answerLength=${answer.length}`);
+      debugLog(
+        `简答题写入：inputs=${liveInputs.length}, answerLength=${answer.length}`,
+      );
       const ok = await fillControl(liveInputs[0], answer);
-      if (!ok) throw new Error('简答题写入后校验失败');
+      if (!ok) throw new Error("简答题写入后校验失败");
       return;
     }
 
-    if (question.type === 'fill') {
+    if (question.type === "fill") {
       const normalizeFillAnswers = (answer) => {
-        if (Array.isArray(answer)) return answer.map((x) => String(x ?? '').trim());
+        if (Array.isArray(answer))
+          return answer.map((x) => String(x ?? "").trim());
         if (answer === undefined || answer === null) return [];
         return [String(answer).trim()];
       };
 
       let answers = normalizeFillAnswers(parsed.answer);
-      debugLog(`填空答案数量检查：页面可见空=${visibleBlankCount}, 模型返回=${answers.length}`);
+      debugLog(
+        `填空答案数量检查：页面可见空=${visibleBlankCount}, 模型返回=${answers.length}`,
+      );
 
       if (answers.length !== visibleBlankCount) {
         addLog(
-          'warning',
-          `模型返回 ${answers.length} 个填空答案，但页面只有 ${visibleBlankCount} 个可见空；自动重问一次`
+          "warning",
+          `模型返回 ${answers.length} 个填空答案，但页面只有 ${visibleBlankCount} 个可见空；自动重问一次`,
         );
 
         parsed = await makeRequest({
@@ -1235,16 +1429,21 @@
         });
         answers = normalizeFillAnswers(parsed.answer);
 
-        debugLog(`纠正后数量检查：页面可见空=${visibleBlankCount}, 模型返回=${answers.length}`);
+        debugLog(
+          `纠正后数量检查：页面可见空=${visibleBlankCount}, 模型返回=${answers.length}`,
+        );
 
         if (answers.length !== visibleBlankCount) {
           throw new Error(
-            `模型纠正后仍返回 ${answers.length} 个答案，但本题实际有 ${visibleBlankCount} 个可见填空框；已停止填写`
+            `模型纠正后仍返回 ${answers.length} 个答案，但本题实际有 ${visibleBlankCount} 个可见填空框；已停止填写`,
           );
         }
 
         parsed.answer = answers;
-        addLog('success', `模型输出已自动纠正为 ${visibleBlankCount} 个填空答案`);
+        addLog(
+          "success",
+          `模型输出已自动纠正为 ${visibleBlankCount} 个填空答案`,
+        );
       } else {
         parsed.answer = answers;
       }
@@ -1255,34 +1454,40 @@
 
   async function testActiveAPI() {
     const model = getActiveModel();
-    if (!model) throw new Error('请先添加并选择模型');
+    if (!model) throw new Error("请先添加并选择模型");
     const apiKey = getSecret(model.id);
-    if (!apiKey) throw new Error('当前页面没有这个模型的 API Key，请重新输入或勾选“记住 API Key”');
+    if (!apiKey)
+      throw new Error(
+        "当前页面没有这个模型的 API Key，请重新输入或勾选“记住 API Key”",
+      );
 
-    addLog('info', `开始测试模型：${model.name} / ${model.model}`);
+    addLog("info", `开始测试模型：${model.name} / ${model.model}`);
     debugLog(`API 连通性测试：model=${model.model}, baseUrl=${model.baseUrl}`);
     const raw = await callOpenAICompatible({
       modelConfig: model,
       apiKey,
-      system: '你是 API 连通性测试器。只返回 JSON。',
+      system: "你是 API 连通性测试器。只返回 JSON。",
       user: '{"task":"ping","reply":{"ok":true}}',
-      purpose: 'api-connection-test',
+      purpose: "api-connection-test",
       timeoutMs: 20000,
     });
     const parsed = tryJSON(raw);
     if (parsed?.ok === true || parsed?.reply?.ok === true) {
-      addLog('success', 'API 测试通过');
+      addLog("success", "API 测试通过");
       return true;
     }
-    addLog('warning', 'API 已成功返回，但测试内容不是预期 JSON；连接本身是通的');
+    addLog(
+      "warning",
+      "API 已成功返回，但测试内容不是预期 JSON；连接本身是通的",
+    );
     return true;
   }
 
   // ---------- Applying answers ----------
 
   function dispatchFormEvents(el) {
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   function setNativeValue(el, value) {
@@ -1290,9 +1495,9 @@
       el instanceof HTMLTextAreaElement
         ? HTMLTextAreaElement.prototype
         : el instanceof HTMLInputElement
-        ? HTMLInputElement.prototype
-        : null;
-    const desc = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
+          ? HTMLInputElement.prototype
+          : null;
+    const desc = proto ? Object.getOwnPropertyDescriptor(proto, "value") : null;
     if (desc?.set) desc.set.call(el, value);
     else el.value = value;
     dispatchFormEvents(el);
@@ -1300,7 +1505,10 @@
 
   function setNativeChecked(el, checked) {
     if (!(el instanceof HTMLInputElement)) return;
-    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked');
+    const desc = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "checked",
+    );
     if (desc?.set) desc.set.call(el, !!checked);
     else el.checked = !!checked;
     dispatchFormEvents(el);
@@ -1312,29 +1520,31 @@
     // Explicit associated <label>.
     if (el.id) {
       try {
-        const label = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        const label = document.querySelector(
+          `label[for="${CSS.escape(el.id)}"]`,
+        );
         if (label && isVisible(label)) return label;
       } catch {}
     }
 
-    const wrappingLabel = el.closest('label');
+    const wrappingLabel = el.closest("label");
     if (wrappingLabel && isVisible(wrappingLabel)) return wrappingLabel;
 
     // Generic custom-control wrappers used by many quiz/form frameworks.
     const wrapper = el.closest(
-      '.ui-checkbox,.ui-radio,.checkbox-option,.radio-option,.option,.choice,[role="checkbox"],[role="radio"],[class*="checkbox"],[class*="radio"]'
+      '.ui-checkbox,.ui-radio,.checkbox-option,.radio-option,.option,.choice,[role="checkbox"],[role="radio"],[class*="checkbox"],[class*="radio"]',
     );
 
     if (wrapper) {
       const preferred = [
-        'label',
-        '.label',
-        '.jqcheck',
-        '.jqradio',
+        "label",
+        ".label",
+        ".jqcheck",
+        ".jqradio",
         '[role="checkbox"]',
         '[role="radio"]',
-        '.checkbox',
-        '.radio',
+        ".checkbox",
+        ".radio",
       ];
       for (const selector of preferred) {
         const target = safeQuery(wrapper, selector);
@@ -1345,7 +1555,7 @@
 
     const parent = el.parentElement;
     if (parent) {
-      for (const selector of ['label', '.label', '.jqcheck', '.jqradio']) {
+      for (const selector of ["label", ".label", ".jqcheck", ".jqradio"]) {
         const target = safeQuery(parent, selector);
         if (target && target !== el && isVisible(target)) return target;
       }
@@ -1358,15 +1568,18 @@
     if (!(el instanceof HTMLInputElement)) return;
     const checked = !!el.checked;
     const wrapper = el.closest('[role="checkbox"],[role="radio"]');
-    if (wrapper) wrapper.setAttribute('aria-checked', checked ? 'true' : 'false');
+    if (wrapper)
+      wrapper.setAttribute("aria-checked", checked ? "true" : "false");
 
     // Common visual helper classes. These are generic state-sync fallbacks,
     // not site templates; real visible clicks are always attempted first.
-    const container = el.closest('.ui-checkbox,.ui-radio,.checkbox-option,.radio-option');
+    const container = el.closest(
+      ".ui-checkbox,.ui-radio,.checkbox-option,.radio-option",
+    );
     if (container) {
-      safeQueryAll(container, '.jqcheck,.jqradio').forEach((node) => {
-        node.classList.toggle('jqchecked', checked);
-        node.classList.toggle('checked', checked);
+      safeQueryAll(container, ".jqcheck,.jqradio").forEach((node) => {
+        node.classList.toggle("jqchecked", checked);
+        node.classList.toggle("checked", checked);
       });
     }
   }
@@ -1374,13 +1587,16 @@
   async function clickControl(el, desiredChecked = true) {
     if (!el) return false;
 
-    if (el instanceof HTMLInputElement && ['radio', 'checkbox'].includes(el.type)) {
+    if (
+      el instanceof HTMLInputElement &&
+      ["radio", "checkbox"].includes(el.type)
+    ) {
       const desired = !!desiredChecked;
       let current = !!el.checked;
       const visualTarget = findVisibleChoiceTarget(el);
 
       debugLog(
-        `选择控件：${describeElement(el)}, desired=${desired}, before=${current}, visualTarget=${describeElement(visualTarget)}`
+        `选择控件：${describeElement(el)}, desired=${desired}, before=${current}, visualTarget=${describeElement(visualTarget)}`,
       );
 
       if (current !== desired) {
@@ -1417,7 +1633,9 @@
 
       syncChoiceAccessibility(el);
       dispatchFormEvents(el);
-      debugLog(`选择控件结果：checked=${el.checked}, success=${el.checked === desired}`);
+      debugLog(
+        `选择控件结果：checked=${el.checked}, success=${el.checked === desired}`,
+      );
       return el.checked === desired;
     }
 
@@ -1426,7 +1644,13 @@
       return true;
     } catch {
       try {
-        el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        el.dispatchEvent(
+          new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+          }),
+        );
         return true;
       } catch {
         return false;
@@ -1436,7 +1660,7 @@
 
   async function fillControl(el, value) {
     if (!el) return false;
-    const wanted = String(value ?? '');
+    const wanted = String(value ?? "");
     debugLog(`准备写入：${describeElement(el)} <= ${JSON.stringify(wanted)}`);
 
     try {
@@ -1445,34 +1669,44 @@
       if (el.isContentEditable) {
         el.textContent = wanted;
         try {
-          el.dispatchEvent(new InputEvent('input', {
-            bubbles: true,
-            inputType: 'insertText',
-            data: wanted,
-          }));
+          el.dispatchEvent(
+            new InputEvent("input", {
+              bubbles: true,
+              inputType: "insertText",
+              data: wanted,
+            }),
+          );
         } catch {
           dispatchFormEvents(el);
         }
       } else {
         setNativeValue(el, wanted);
         try {
-          el.dispatchEvent(new InputEvent('input', {
-            bubbles: true,
-            inputType: 'insertText',
-            data: wanted,
-          }));
+          el.dispatchEvent(
+            new InputEvent("input", {
+              bubbles: true,
+              inputType: "insertText",
+              data: wanted,
+            }),
+          );
         } catch {}
       }
 
-      el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Unidentified' }));
-      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Unidentified' }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, key: "Unidentified" }),
+      );
+      el.dispatchEvent(
+        new KeyboardEvent("keyup", { bubbles: true, key: "Unidentified" }),
+      );
+      el.dispatchEvent(new Event("change", { bubbles: true }));
       el.blur();
       await sleep(90);
 
       const actual = el.isContentEditable ? el.textContent : el.value;
-      const ok = String(actual ?? '') === wanted;
-      debugLog(`写入后检查：${describeElement(el)} actual=${JSON.stringify(actual)} expected=${JSON.stringify(wanted)} ok=${ok}`);
+      const ok = String(actual ?? "") === wanted;
+      debugLog(
+        `写入后检查：${describeElement(el)} actual=${JSON.stringify(actual)} expected=${JSON.stringify(wanted)} ok=${ok}`,
+      );
       return ok;
     } catch (error) {
       debugLog(`写入异常：${describeElement(el)} error=${error.message}`);
@@ -1502,33 +1736,49 @@
   }
 
   function normalizeAnswerLetters(answer) {
-    if (Array.isArray(answer)) return answer.map((x) => String(x).trim().toUpperCase()).filter(Boolean);
-    return String(answer || '')
+    if (Array.isArray(answer))
+      return answer.map((x) => String(x).trim().toUpperCase()).filter(Boolean);
+    return String(answer || "")
       .toUpperCase()
       .split(/[^A-Z]+/)
-      .join('')
-      .split('')
+      .join("")
+      .split("")
       .filter(Boolean);
   }
 
   async function applyAnswer(question, answerObj) {
-    if (!answerObj || answerObj.answer === undefined || answerObj.answer === null) {
-      throw new Error('AI 返回中缺少 answer');
+    if (
+      !answerObj ||
+      answerObj.answer === undefined ||
+      answerObj.answer === null
+    ) {
+      throw new Error("AI 返回中缺少 answer");
     }
 
-    if (question.type === 'single') {
-      const letter = String(answerObj.answer).trim().toUpperCase().match(/[A-Z]/)?.[0];
-      const option = question.options.find((o) => String(o.label).toUpperCase() === letter);
-      if (!option) throw new Error(`找不到 AI 返回的选项 ${letter || JSON.stringify(answerObj.answer)}`);
+    if (question.type === "single") {
+      const letter = String(answerObj.answer)
+        .trim()
+        .toUpperCase()
+        .match(/[A-Z]/)?.[0];
+      const option = question.options.find(
+        (o) => String(o.label).toUpperCase() === letter,
+      );
+      if (!option)
+        throw new Error(
+          `找不到 AI 返回的选项 ${letter || JSON.stringify(answerObj.answer)}`,
+        );
       await clickControl(option.element, true);
       return;
     }
 
-    if (question.type === 'multiple') {
+    if (question.type === "multiple") {
       const wanted = new Set(normalizeAnswerLetters(answerObj.answer));
       for (const option of question.options) {
         const shouldCheck = wanted.has(String(option.label).toUpperCase());
-        if (option.element instanceof HTMLInputElement && option.element.type === 'checkbox') {
+        if (
+          option.element instanceof HTMLInputElement &&
+          option.element.type === "checkbox"
+        ) {
           await clickControl(option.element, shouldCheck);
         } else if (shouldCheck) {
           await clickControl(option.element, true);
@@ -1538,21 +1788,27 @@
       return;
     }
 
-    if (question.type === 'fill') {
-      const answers = Array.isArray(answerObj.answer) ? answerObj.answer : [answerObj.answer];
+    if (question.type === "fill") {
+      const answers = Array.isArray(answerObj.answer)
+        ? answerObj.answer
+        : [answerObj.answer];
       let liveInputs = getLiveFillInputs(question);
 
-      debugLog(`填空映射开始：AI答案=${JSON.stringify(answers)}, 扫描记录inputs=${question.inputs?.length || 0}, 当前DOM inputs=${liveInputs.length}`);
+      debugLog(
+        `填空映射开始：AI答案=${JSON.stringify(answers)}, 扫描记录inputs=${question.inputs?.length || 0}, 当前DOM inputs=${liveInputs.length}`,
+      );
 
-      if (!liveInputs.length) throw new Error('找不到填空输入框');
+      if (!liveInputs.length) throw new Error("找不到填空输入框");
 
       if (answers.length > 1 && liveInputs.length < answers.length) {
-        throw new Error(`填空映射失败：AI 返回 ${answers.length} 个答案，但当前只定位到 ${liveInputs.length} 个输入框。请开启 Debug 查看扫描结果`);
+        throw new Error(
+          `填空映射失败：AI 返回 ${answers.length} 个答案，但当前只定位到 ${liveInputs.length} 个输入框。请开启 Debug 查看扫描结果`,
+        );
       }
 
       if (liveInputs.length === 1) {
         const ok = await fillControl(liveInputs[0], answers[0]);
-        if (!ok) throw new Error('填空写入后校验失败');
+        if (!ok) throw new Error("填空写入后校验失败");
         return;
       }
 
@@ -1560,15 +1816,20 @@
       for (let i = 0; i < count; i++) {
         liveInputs = getLiveFillInputs(question);
         const target = liveInputs[i];
-        debugLog(`填空映射 ${i + 1}/${count}: target=${describeElement(target)}, answer=${JSON.stringify(answers[i])}`);
-        if (!target) throw new Error(`第 ${i + 1} 个填空输入框在页面更新后丢失`);
+        debugLog(
+          `填空映射 ${i + 1}/${count}: target=${describeElement(target)}, answer=${JSON.stringify(answers[i])}`,
+        );
+        if (!target)
+          throw new Error(`第 ${i + 1} 个填空输入框在页面更新后丢失`);
 
         const ok = await fillControl(target, answers[i]);
         if (!ok) {
           await sleep(120);
           const retryInputs = getLiveFillInputs(question);
           const retryTarget = retryInputs[i];
-          debugLog(`第 ${i + 1} 空首次校验失败，重新定位后重试：${describeElement(retryTarget)}`);
+          debugLog(
+            `第 ${i + 1} 空首次校验失败，重新定位后重试：${describeElement(retryTarget)}`,
+          );
           if (!retryTarget || !(await fillControl(retryTarget, answers[i]))) {
             throw new Error(`第 ${i + 1} 个填空写入后校验失败`);
           }
@@ -1579,7 +1840,9 @@
       const finalInputs = getLiveFillInputs(question);
       debugLog(`填空映射完成：当前DOM inputs=${finalInputs.length}`);
       finalInputs.slice(0, count).forEach((el, i) => {
-        debugLog(`  最终值 #${i + 1}: ${describeElement(el)} value=${JSON.stringify(el.isContentEditable ? el.textContent : el.value)}`);
+        debugLog(
+          `  最终值 #${i + 1}: ${describeElement(el)} value=${JSON.stringify(el.isContentEditable ? el.textContent : el.value)}`,
+        );
       });
     }
   }
@@ -1589,46 +1852,46 @@
     if (!settings.highlight || !question?.element) return;
     const el = question.element;
     if (active) {
-      el.setAttribute('data-aia-processing', '1');
+      el.setAttribute("data-aia-processing", "1");
       if (settings.scroll) {
         try {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
         } catch {}
       }
     } else {
-      el.removeAttribute('data-aia-processing');
+      el.removeAttribute("data-aia-processing");
     }
   }
 
   function markCompleted(question) {
     if (question?.element) {
-      question.element.removeAttribute('data-aia-processing');
-      question.element.setAttribute('data-aia-completed', '1');
+      question.element.removeAttribute("data-aia-processing");
+      question.element.setAttribute("data-aia-completed", "1");
     }
   }
 
   async function startAnswering() {
     if (state.isRunning) return;
     if (!state.questions.length) {
-      addLog('warning', '请先扫描题目');
+      addLog("warning", "请先扫描题目");
       return;
     }
 
     const model = getActiveModel();
     if (!model) {
-      addLog('error', '请先在“模型”中添加 OpenAI 兼容 API');
-      switchTab('models');
+      addLog("error", "请先在“模型”中添加 OpenAI 兼容 API");
+      switchTab("models");
       return;
     }
     if (!getSecret(model.id)) {
-      addLog('error', '当前模型没有 API Key，请重新输入');
-      switchTab('models');
+      addLog("error", "当前模型没有 API Key，请重新输入");
+      switchTab("models");
       return;
     }
 
     state.isRunning = true;
     renderHome();
-    addLog('info', `开始答题，共 ${state.questions.length} 题`);
+    addLog("info", `开始答题，共 ${state.questions.length} 题`);
 
     const settings = getSettings();
 
@@ -1638,7 +1901,10 @@
       if (q.answered) continue;
 
       highlightQuestion(q, true);
-      addLog('info', `第 ${i + 1}/${state.questions.length} 题：${cleanText(q.text, 60)}`);
+      addLog(
+        "info",
+        `第 ${i + 1}/${state.questions.length} 题：${cleanText(q.text, 60)}`,
+      );
 
       try {
         const answer = await askAnswer(q);
@@ -1648,15 +1914,18 @@
         }
         await applyAnswer(q, answer);
         q.answer = answer.answer;
-        q.explanation = answer.explanation || '';
+        q.explanation = answer.explanation || "";
         q.answered = true;
         state.answeredCount += 1;
         markCompleted(q);
         updateCounters();
-        addLog('success', `第 ${i + 1} 题完成，答案：${JSON.stringify(answer.answer)}`);
+        addLog(
+          "success",
+          `第 ${i + 1} 题完成，答案：${JSON.stringify(answer.answer)}`,
+        );
       } catch (error) {
         highlightQuestion(q, false);
-        addLog('error', `第 ${i + 1} 题失败：${error.message}`);
+        addLog("error", `第 ${i + 1} 题失败：${error.message}`);
       }
 
       await sleep(clamp(Number(settings.delayMs) || 450, 100, 5000));
@@ -1665,20 +1934,26 @@
     const wasStopped = !state.isRunning;
     state.isRunning = false;
     renderHome();
-    if (wasStopped) addLog('warning', '答题已暂停');
-    else addLog('success', `全部处理完成：${state.answeredCount}/${state.questions.length}`);
+    if (wasStopped) addLog("warning", "答题已暂停");
+    else
+      addLog(
+        "success",
+        `全部处理完成：${state.answeredCount}/${state.questions.length}`,
+      );
   }
 
   function stopAnswering() {
     state.isRunning = false;
-    document.querySelectorAll('[data-aia-processing]').forEach((el) => el.removeAttribute('data-aia-processing'));
+    document
+      .querySelectorAll("[data-aia-processing]")
+      .forEach((el) => el.removeAttribute("data-aia-processing"));
     renderHome();
   }
 
   // ---------- UI ----------
 
   function injectStyles() {
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.id = `${APP.id}-style`;
     style.textContent = `
       #${APP.rootId}, #${APP.rootId} * { box-sizing: border-box; }
@@ -1785,7 +2060,7 @@
   function createUI() {
     if (document.getElementById(APP.rootId)) return;
 
-    const root = document.createElement('div');
+    const root = document.createElement("div");
     root.id = APP.rootId;
     root.innerHTML = `
       <button id="aia-fab" title="${APP.name}">AI</button>
@@ -1813,10 +2088,14 @@
     `;
     document.documentElement.appendChild(root);
 
-    root.querySelector('#aia-fab').addEventListener('click', () => togglePanel(true));
-    root.querySelector('#aia-close').addEventListener('click', () => togglePanel(false));
-    root.querySelectorAll('.aia-tab').forEach((btn) => {
-      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    root
+      .querySelector("#aia-fab")
+      .addEventListener("click", () => togglePanel(true));
+    root
+      .querySelector("#aia-close")
+      .addEventListener("click", () => togglePanel(false));
+    root.querySelectorAll(".aia-tab").forEach((btn) => {
+      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
     });
 
     renderAll();
@@ -1824,26 +2103,33 @@
 
   function togglePanel(open) {
     state.panelOpen = open ?? !state.panelOpen;
-    document.getElementById('aia-panel')?.classList.toggle('open', state.panelOpen);
+    document
+      .getElementById("aia-panel")
+      ?.classList.toggle("open", state.panelOpen);
   }
 
   function switchTab(tab) {
     state.activeTab = tab;
-    document.querySelectorAll('.aia-tab').forEach((el) => el.classList.toggle('active', el.dataset.tab === tab));
-    document.querySelectorAll('.aia-view').forEach((el) => el.classList.toggle('active', el.dataset.view === tab));
+    document
+      .querySelectorAll(".aia-tab")
+      .forEach((el) => el.classList.toggle("active", el.dataset.tab === tab));
+    document
+      .querySelectorAll(".aia-view")
+      .forEach((el) => el.classList.toggle("active", el.dataset.view === tab));
     renderAll();
   }
 
   function logItemsHTML() {
-    if (!state.logs.length) return '<div class="aia-log-item aia-log-info">暂无日志</div>';
+    if (!state.logs.length)
+      return '<div class="aia-log-item aia-log-info">暂无日志</div>';
     return state.logs
       .map(
         (l) =>
           `<div class="aia-log-item aia-log-${escapeHtml(l.level)}"><span class="aia-log-time">${escapeHtml(
-            l.time
-          )}</span>${escapeHtml(l.message)}</div>`
+            l.time,
+          )}</span>${escapeHtml(l.message)}</div>`,
       )
-      .join('');
+      .join("");
   }
 
   function renderHome() {
@@ -1862,30 +2148,30 @@
           <div class="aia-stat"><strong data-aia-count-answered>${state.answeredCount}</strong><span>已完成</span></div>
         </div>
         <div class="aia-divider"></div>
-        <div class="aia-muted">当前模型：${model ? `<b>${escapeHtml(model.name)}</b> · ${escapeHtml(model.model)}` : '未配置'}</div>
+        <div class="aia-muted">当前模型：${model ? `<b>${escapeHtml(model.name)}</b> · ${escapeHtml(model.model)}` : "未配置"}</div>
       </div>
       <div class="aia-grid2">
-        <button class="aia-btn aia-secondary" id="aia-scan" ${state.isScanning || state.isRunning ? 'disabled' : ''}>
-          ${state.isScanning ? '扫描中…' : '扫描题目'}
+        <button class="aia-btn aia-secondary" id="aia-scan" ${state.isScanning || state.isRunning ? "disabled" : ""}>
+          ${state.isScanning ? "扫描中…" : "扫描题目"}
         </button>
         ${
           state.isRunning
             ? '<button class="aia-btn aia-warn" id="aia-stop">暂停答题</button>'
-            : `<button class="aia-btn aia-primary" id="aia-start" ${!state.questions.length ? 'disabled' : ''}>开始自动答题</button>`
+            : `<button class="aia-btn aia-primary" id="aia-start" ${!state.questions.length ? "disabled" : ""}>开始自动答题</button>`
         }
       </div>
       <div class="aia-card" style="margin-top:12px">
         <div class="aia-switch-row">
           <div><b>AI 扫描</b><div class="aia-muted">开启：强制 AI 识别全部题目；关闭：仅本地 DOM 扫描</div></div>
-          <button type="button" class="aia-toggle ${settings.aiScan ? 'on' : ''}" id="aia-setting-ai-scan" aria-pressed="${settings.aiScan ? 'true' : 'false'}" aria-label="AI 扫描"></button>
+          <button type="button" class="aia-toggle ${settings.aiScan ? "on" : ""}" id="aia-setting-ai-scan" aria-pressed="${settings.aiScan ? "true" : "false"}" aria-label="AI 扫描"></button>
         </div>
         <div class="aia-switch-row">
           <div><b>自动滚动</b><div class="aia-muted">答题时滚到当前题目</div></div>
-          <button type="button" class="aia-toggle ${settings.scroll ? 'on' : ''}" id="aia-setting-scroll" aria-pressed="${settings.scroll ? 'true' : 'false'}" aria-label="自动滚动"></button>
+          <button type="button" class="aia-toggle ${settings.scroll ? "on" : ""}" id="aia-setting-scroll" aria-pressed="${settings.scroll ? "true" : "false"}" aria-label="自动滚动"></button>
         </div>
         <div class="aia-switch-row">
           <div><b>Debug 模式</b><div class="aia-muted">显示 API 状态、响应摘要、扫描映射和输入框写入校验</div></div>
-          <button type="button" class="aia-toggle ${settings.debug ? 'on' : ''}" id="aia-setting-debug" aria-pressed="${settings.debug ? 'true' : 'false'}" aria-label="Debug 模式"></button>
+          <button type="button" class="aia-toggle ${settings.debug ? "on" : ""}" id="aia-setting-debug" aria-pressed="${settings.debug ? "true" : "false"}" aria-label="Debug 模式"></button>
         </div>
         <label class="aia-label">题间延迟（毫秒）</label>
         <input class="aia-input" id="aia-setting-delay" type="number" min="100" max="5000" value="${Number(settings.delayMs) || 450}">
@@ -1899,34 +2185,41 @@
       </div>
     `;
 
-    view.querySelector('#aia-scan')?.addEventListener('click', scanQuestions);
-    view.querySelector('#aia-start')?.addEventListener('click', startAnswering);
-    view.querySelector('#aia-stop')?.addEventListener('click', stopAnswering);
+    view.querySelector("#aia-scan")?.addEventListener("click", scanQuestions);
+    view.querySelector("#aia-start")?.addEventListener("click", startAnswering);
+    view.querySelector("#aia-stop")?.addEventListener("click", stopAnswering);
     const bindToggle = (selector, key, currentValue, label) => {
-      view.querySelector(selector)?.addEventListener('click', () => {
+      view.querySelector(selector)?.addEventListener("click", () => {
         const next = !currentValue;
         setSettings({ [key]: next });
-        if (key === 'debug') addLog('info', next ? 'Debug 模式已开启' : 'Debug 模式已关闭');
-        else addLog('info', `${label}${next ? '已开启' : '已关闭'}`);
+        if (key === "debug")
+          addLog("info", next ? "Debug 模式已开启" : "Debug 模式已关闭");
+        else addLog("info", `${label}${next ? "已开启" : "已关闭"}`);
         renderHome();
       });
     };
-    bindToggle('#aia-setting-ai-scan', 'aiScan', !!settings.aiScan, 'AI 扫描');
-    bindToggle('#aia-setting-scroll', 'scroll', !!settings.scroll, '自动滚动');
-    bindToggle('#aia-setting-debug', 'debug', !!settings.debug, 'Debug 模式');
-    view.querySelector('#aia-setting-delay')?.addEventListener('change', (e) => {
-      setSettings({ delayMs: clamp(Number(e.target.value) || 450, 100, 5000) });
-    });
-    view.querySelector('#aia-setting-timeout')?.addEventListener('change', (e) => {
-      const seconds = clamp(Number(e.target.value) || 120, 30, 240);
-      setSettings({ requestTimeoutMs: seconds * 1000 });
-      e.target.value = String(seconds);
-    });
-    view.querySelector('#aia-log-clear')?.addEventListener('click', () => {
+    bindToggle("#aia-setting-ai-scan", "aiScan", !!settings.aiScan, "AI 扫描");
+    bindToggle("#aia-setting-scroll", "scroll", !!settings.scroll, "自动滚动");
+    bindToggle("#aia-setting-debug", "debug", !!settings.debug, "Debug 模式");
+    view
+      .querySelector("#aia-setting-delay")
+      ?.addEventListener("change", (e) => {
+        setSettings({
+          delayMs: clamp(Number(e.target.value) || 450, 100, 5000),
+        });
+      });
+    view
+      .querySelector("#aia-setting-timeout")
+      ?.addEventListener("change", (e) => {
+        const seconds = clamp(Number(e.target.value) || 120, 30, 240);
+        setSettings({ requestTimeoutMs: seconds * 1000 });
+        e.target.value = String(seconds);
+      });
+    view.querySelector("#aia-log-clear")?.addEventListener("click", () => {
       state.logs = [];
       renderHome();
     });
-    const box = view.querySelector('#aia-log-box');
+    const box = view.querySelector("#aia-log-box");
     if (box) box.scrollTop = box.scrollHeight;
   }
 
@@ -1967,12 +2260,12 @@
                   .map((m) => {
                     const hasKey = !!getSecret(m.id);
                     return `
-                    <div class="aia-model ${m.id === activeId ? 'active' : ''}" data-model-id="${escapeHtml(m.id)}">
+                    <div class="aia-model ${m.id === activeId ? "active" : ""}" data-model-id="${escapeHtml(m.id)}">
                       <div class="aia-row aia-between">
                         <div>
                           <div class="aia-model-name">${escapeHtml(m.name)}</div>
                           <div class="aia-model-meta">${escapeHtml(m.model)} · ${escapeHtml(m.baseUrl)}</div>
-                          <div class="aia-model-meta">${hasKey ? '🔑 API Key 可用' : '⚠️ 本会话没有 API Key'}</div>
+                          <div class="aia-model-meta">${hasKey ? "🔑 API Key 可用" : "⚠️ 本会话没有 API Key"}</div>
                         </div>
                         <div>
                           <button class="aia-small-btn" data-action="use">使用</button>
@@ -1982,7 +2275,7 @@
                       </div>
                     </div>`;
                   })
-                  .join('')
+                  .join("")
               : '<div class="aia-muted" style="margin-top:8px">还没有模型。这里不会提供任何内置第三方中转服务。</div>'
           }
         </div>
@@ -1990,20 +2283,23 @@
       <div class="aia-card">
         <b>API 连通性测试</b>
         <div class="aia-muted" style="margin:5px 0 9px">只发送一个很短的 ping，不代表真实题目能在 20 秒内回答。测试结果同时写入“答题”页日志。</div>
-        <button class="aia-btn aia-success aia-full" id="aia-test-current-api" ${!getActiveModel() ? 'disabled' : ''}>测试当前 API</button>
+        <button class="aia-btn aia-success aia-full" id="aia-test-current-api" ${!getActiveModel() ? "disabled" : ""}>测试当前 API</button>
       </div>
     `;
 
-    view.querySelector('#aia-model-save')?.addEventListener('click', () => {
-      const name = cleanText(view.querySelector('#aia-model-name').value, 80);
-      const baseUrl = view.querySelector('#aia-model-url').value.trim();
-      const apiKey = view.querySelector('#aia-model-key').value.trim();
-      const modelName = cleanText(view.querySelector('#aia-model-model').value, 120);
-      const remember = view.querySelector('#aia-model-remember').checked;
-      const editId = view.querySelector('#aia-model-edit-id').value;
+    view.querySelector("#aia-model-save")?.addEventListener("click", () => {
+      const name = cleanText(view.querySelector("#aia-model-name").value, 80);
+      const baseUrl = view.querySelector("#aia-model-url").value.trim();
+      const apiKey = view.querySelector("#aia-model-key").value.trim();
+      const modelName = cleanText(
+        view.querySelector("#aia-model-model").value,
+        120,
+      );
+      const remember = view.querySelector("#aia-model-remember").checked;
+      const editId = view.querySelector("#aia-model-edit-id").value;
 
       if (!name || !baseUrl || !modelName) {
-        alert('请填写名称、Base URL 和模型名');
+        alert("请填写名称、Base URL 和模型名");
         return;
       }
 
@@ -2021,7 +2317,7 @@
         if (idx < 0) return;
         all[idx] = { ...all[idx], name, baseUrl, model: modelName };
       } else {
-        id = uid('model');
+        id = uid("model");
         all.push({ id, name, baseUrl, model: modelName });
       }
 
@@ -2034,60 +2330,76 @@
         setRememberFlag(id, remember);
       }
 
-      addLog('success', `模型已保存：${name}`);
+      addLog("success", `模型已保存：${name}`);
       renderModels();
       renderHome();
     });
 
-    view.querySelector('#aia-test-current-api')?.addEventListener('click', async () => {
-      addLog('info', 'API 连通性测试已启动，已切换到答题页查看日志');
-      switchTab('home');
-      try {
-        await testActiveAPI();
-      } catch (error) {
-        addLog('error', `API 测试失败：${error.message}`);
-      }
-    });
+    view
+      .querySelector("#aia-test-current-api")
+      ?.addEventListener("click", async () => {
+        addLog("info", "API 连通性测试已启动，已切换到答题页查看日志");
+        switchTab("home");
+        try {
+          await testActiveAPI();
+        } catch (error) {
+          addLog("error", `API 测试失败：${error.message}`);
+        }
+      });
 
-    view.querySelectorAll('.aia-model').forEach((card) => {
+    view.querySelectorAll(".aia-model").forEach((card) => {
       const id = card.dataset.modelId;
-      card.querySelector('[data-action="use"]')?.addEventListener('click', () => {
-        setActiveModelId(id);
-        addLog('success', `已切换模型：${getModels().find((m) => m.id === id)?.name || id}`);
-        renderModels();
-        renderHome();
-      });
+      card
+        .querySelector('[data-action="use"]')
+        ?.addEventListener("click", () => {
+          setActiveModelId(id);
+          addLog(
+            "success",
+            `已切换模型：${getModels().find((m) => m.id === id)?.name || id}`,
+          );
+          renderModels();
+          renderHome();
+        });
 
-      card.querySelector('[data-action="edit"]')?.addEventListener('click', () => {
-        const m = getModels().find((x) => x.id === id);
-        if (!m) return;
-        view.querySelector('#aia-model-name').value = m.name;
-        view.querySelector('#aia-model-url').value = m.baseUrl;
-        view.querySelector('#aia-model-model').value = m.model;
-        view.querySelector('#aia-model-key').value = '';
-        view.querySelector('#aia-model-key').placeholder = getSecret(id) ? '留空则保持现有 Key' : '请输入 API Key';
-        view.querySelector('#aia-model-remember').checked = !!getRememberFlags()[id];
-        view.querySelector('#aia-model-edit-id').value = id;
-        view.querySelector('#aia-model-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
+      card
+        .querySelector('[data-action="edit"]')
+        ?.addEventListener("click", () => {
+          const m = getModels().find((x) => x.id === id);
+          if (!m) return;
+          view.querySelector("#aia-model-name").value = m.name;
+          view.querySelector("#aia-model-url").value = m.baseUrl;
+          view.querySelector("#aia-model-model").value = m.model;
+          view.querySelector("#aia-model-key").value = "";
+          view.querySelector("#aia-model-key").placeholder = getSecret(id)
+            ? "留空则保持现有 Key"
+            : "请输入 API Key";
+          view.querySelector("#aia-model-remember").checked =
+            !!getRememberFlags()[id];
+          view.querySelector("#aia-model-edit-id").value = id;
+          view
+            .querySelector("#aia-model-name")
+            .scrollIntoView({ behavior: "smooth", block: "center" });
+        });
 
-      card.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
-        if (!confirm('确定删除这个模型和已保存的 API Key 吗？')) return;
-        const next = getModels().filter((x) => x.id !== id);
-        saveModels(next);
-        deleteSecret(id);
-        if (getActiveModelId() === id) setActiveModelId(next[0]?.id || '');
-        renderModels();
-        renderHome();
-      });
+      card
+        .querySelector('[data-action="delete"]')
+        ?.addEventListener("click", () => {
+          if (!confirm("确定删除这个模型和已保存的 API Key 吗？")) return;
+          const next = getModels().filter((x) => x.id !== id);
+          saveModels(next);
+          deleteSecret(id);
+          if (getActiveModelId() === id) setActiveModelId(next[0]?.id || "");
+          renderModels();
+          renderHome();
+        });
     });
   }
-
 
   function renderPrivacy() {
     const view = document.querySelector('[data-view="privacy"]');
     if (!view) return;
-    const rememberedCount = Object.values(getRememberFlags()).filter(Boolean).length;
+    const rememberedCount =
+      Object.values(getRememberFlags()).filter(Boolean).length;
 
     view.innerHTML = `
       <div class="aia-privacy-note">
@@ -2123,10 +2435,10 @@
                   .map(
                     (e) =>
                       `<div class="aia-network">${escapeHtml(e.time)}<br>${escapeHtml(e.purpose)} → ${escapeHtml(
-                        e.destination
-                      )}<br>${e.bytes} bytes</div>`
+                        e.destination,
+                      )}<br>${e.bytes} bytes</div>`,
                   )
-                  .join('')
+                  .join("")
               : '<div class="aia-muted" style="margin-top:8px">本页尚无 AI 网络请求。</div>'
           }
         </div>
@@ -2140,21 +2452,20 @@
       </div>
     `;
 
-    view.querySelector('#aia-clear-secrets')?.addEventListener('click', () => {
-      if (!confirm('确定清除所有已保存的 API Key 吗？')) return;
+    view.querySelector("#aia-clear-secrets")?.addEventListener("click", () => {
+      if (!confirm("确定清除所有已保存的 API Key 吗？")) return;
       for (const model of getModels()) deleteSecret(model.id);
       sessionSecrets.clear();
-      addLog('success', '所有已保存 API Key 已清除');
+      addLog("success", "所有已保存 API Key 已清除");
       renderPrivacy();
       renderModels();
     });
 
-    view.querySelector('#aia-clear-network')?.addEventListener('click', () => {
+    view.querySelector("#aia-clear-network")?.addEventListener("click", () => {
       state.networkEvents = [];
       renderPrivacy();
     });
   }
-
 
   function renderAll() {
     renderHome();
@@ -2163,15 +2474,14 @@
     updateCounters();
   }
 
-
   // ---------- Keyboard / menu ----------
 
   function setupMenu() {
     try {
-      GM_registerMenuCommand('打开 / 关闭答题助手', () => togglePanel());
-      GM_registerMenuCommand('扫描题目', () => {
+      GM_registerMenuCommand("打开 / 关闭答题助手", () => togglePanel());
+      GM_registerMenuCommand("扫描题目", () => {
         togglePanel(true);
-        switchTab('home');
+        switchTab("home");
         scanQuestions();
       });
     } catch {}
@@ -2179,14 +2489,14 @@
 
   function setupKeyboard() {
     document.addEventListener(
-      'keydown',
+      "keydown",
       (e) => {
-        if (e.altKey && e.shiftKey && e.code === 'KeyA') {
+        if (e.altKey && e.shiftKey && e.code === "KeyA") {
           e.preventDefault();
           togglePanel();
         }
       },
-      true
+      true,
     );
   }
 
@@ -2200,12 +2510,12 @@
     setupKeyboard();
 
     const settings = getSettings();
-    addLog('info', `${APP.name} 已加载；无遥测，API Key 默认仅会话保存`);
+    addLog("info", `${APP.name} 已加载；无遥测，API Key 默认仅会话保存`);
     if (settings.autoOpen) togglePanel(true);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once: true });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
   } else {
     init();
   }
