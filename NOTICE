@@ -1,0 +1,32 @@
+AI Answer Assistant Privacy Safe
+
+This project is a privacy-focused derivative/rewrite of functionality and code
+from the following open-source project:
+
+Original project:
+  AI-ANSWER-ASSISTANT
+
+Original repository:
+  https://github.com/rehuan/AI-ANSWER-ASSISTANT
+
+Original author / copyright holder:
+  See the original repository and its commit history for applicable copyright
+  notices and contributors.
+
+Original license:
+  GNU General Public License v3.0 (GPL-3.0)
+
+Major modifications in this project include:
+  - Tampermonkey single-file userscript architecture
+  - Removal of built-in telemetry/statistics endpoints
+  - Removal of the built-in intermediary AI service
+  - Removal of site-specific templates
+  - Sanitized DOM / AI scanning
+  - Session-only API key option
+  - Debugging and request diagnostics
+  - Multi-blank fill handling
+  - Essay / short-answer support
+  - Generic visible-choice interaction
+  - Privacy-oriented network restrictions and documentation
+
+This derivative work remains licensed under GPL-3.0.
