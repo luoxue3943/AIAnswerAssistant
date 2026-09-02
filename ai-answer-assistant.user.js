@@ -2,7 +2,7 @@
 // @name         AI-Answer-Assistant
 // @name:zh-CN   AI 自动答题助手
 // @namespace    https://github.com/luoxue3943/AI-Answer-Assistant
-// @version      1.5.2
+// @version      1.5.3
 // @description  隐私优先的 AI 自动答题助手：无站点模板，全靠本地 DOM 扫描与可选脱敏 AI 兜底；仅向用户配置的 OpenAI 兼容 API 发送必要题干/选项。
 // @author       珞雪
 // @license      GPL-3.0-or-later
@@ -16,8 +16,6 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @connect      *
-// @downloadURL https://update.greasyfork.org/scripts/593483/AI-Answer-Assistant.user.js
-// @updateURL https://update.greasyfork.org/scripts/593483/AI-Answer-Assistant.meta.js
 // ==/UserScript==
 
 (() => {
@@ -39,7 +37,7 @@
   const APP = {
     id: "aia-privacy-safe",
     name: "AI 自动答题助手",
-    version: "1.5.2",
+    version: "1.5.3",
     rootId: "aia-privacy-root",
   };
 

@@ -5,7 +5,7 @@
 本项目基于 `rehuan/AI-ANSWER-ASSISTANT` 的功能思路与部分实现进行重构，
 重点移除默认中转、遥测与不必要的数据上传，并改造成单文件 Tampermonkey userscript。
 
-> 当前版本：v1.5.2
+> 当前版本：v1.5.3
 
 ## 特性
 
